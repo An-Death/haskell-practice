@@ -1,7 +1,7 @@
 {-# LANGUAGE ImplicitParams #-}
 module NewYear where
 import Data.Char
-
+import Data.List (unfoldr)
 import GHC.IO.Encoding
 import Control.Monad
 
@@ -24,6 +24,16 @@ capitalize [] = []
 capitalize (x:xs) = toUpper x:xs
 
 
+decode' :: String -> String
+decode' [] = []
+decode' (magicNumber:xs) = (capitalize . foldl decode'' "") $ chanks2 xs where  
+    chanks2 = (chanks 2) . reverse
+    chanks n = takeWhile (not.null) . unfoldr (Just . splitAt n) 
+    toIndex = (subtract $ digitToInt magicNumber) . read
+
+    decode'' :: String -> String -> String
+    decode'' acc a = acc ++ [char] where 
+        char = alphabet !! toIndex a
 
 main ::IO ()
 main = do
@@ -34,4 +44,4 @@ main = do
 main' = do
     putStrLn "put str"
     inputStr <- getLine
-    putStrLn   $ decode $ inputStr
+    putStrLn   $ decode' $ inputStr
