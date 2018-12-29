@@ -133,10 +133,10 @@ instance Enum Odd where
 
     enumFrom a = iterate succ a
     -- enumFromThen a b 
-    enumFromTo a b = [Odd x | x <- [c..d], odd x] where 
-        c =  a::Integer
-        d = b::Integer
-    enumFromThenTo a b c = [a,b..c]
+    -- enumFromTo a b = [Odd x | x <- [c..d], odd x] where 
+    --     c =  a::Integer
+    --     d = b::Integer
+    -- enumFromThenTo a b c = [a,b..c]
 
 addEven :: Odd -> Integer -> Odd
 addEven (Odd n) m | m `mod` 2 == 0 = Odd (n + m)
@@ -190,8 +190,19 @@ allTests = zip [0..] testList
 -- Список тестов с ошибками
 badTests = map fst $ filter (not . snd) allTests
 
+coins :: Num a => [a]
+coins = [2,3,7]
+-- My own first try 
+-- Not realy beatiful 
+change :: (Ord a, Num a) => a -> [[a]]
+change c = filter ((c==) . sum ) $ concatMap (\x -> helper' [x] c ) coins
+helper' acc c
+    | sum acc >= c = acc:[]
+    | sum acc < c = concatMap (\x -> helper' (acc++[x]) c) coins
 
-
-
--- change :: (Ord a, Num a) => a -> [[a]]
--- change x = [ count (x - (n * c)) coins | n <- [0 .. (quot x c)] ]
+-- After some hours of optimizatios
+change' :: (Ord a, Num a) => a -> [[a]]
+change' n | n < 0     = []
+         | n == 0    = [[]]
+         | otherwise = [ x : xs | x <- coins, xs <- change (n - x) ]
+        
