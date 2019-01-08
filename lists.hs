@@ -206,3 +206,85 @@ change' n | n < 0     = []
          | n == 0    = [[]]
          | otherwise = [ x : xs | x <- coins, xs <- change (n - x) ]
         
+
+-- foldr from right to left
+-- foldr f ini [1,2,3] ~>> 1 `f` (2 `f` (3 `f` ini))
+foldr' :: (a -> b -> b) -> b -> [a] -> b 
+foldr' f acc []      = acc
+foldr' f acc (x:xs)  = x `f` foldr f acc xs
+
+-- accumulate sum of power2  on all ellements witch > 0
+sumPositiveSquares :: [Integer] -> Integer
+sumPositiveSquares = foldr' f 0 where   
+    f x s | x>0 = x^2 + s
+          | otherwise = s
+
+-- foldl from left to right
+-- foldl f ini [1,2,3] ~>> ((ini `f` 1) `f` 2) `f` 3
+-- f(f(f ini 1) 2) 3
+-- not recomended to use, because on large list create large lazy func
+-- foldl' :: (b -> a -> b) -> b -> [a] -> b
+-- foldl' f acc [] =  acc
+-- foldl' f acc (x:xs) = foldl' f (f acc x) xs
+
+-- copy of Data.List (foldl')
+foldl'' :: (b -> a -> b) -> b -> [a] -> b
+foldl'' f acc [] =  acc
+foldl'' f acc (x:xs) = acc' `seq` foldl'' f acc' xs 
+    where  acc' = f acc x
+
+
+meanList :: [Double] -> Double
+meanList = awg' . foldr f (0,0) where 
+    f x (len, sum) = (len +1, sum+x)
+    awg' (len, sum) = sum / len
+
+-- left only values from even index's of list
+-- GHCi> evenOnly [1..10]
+-- [2,4,6,8,10]
+-- GHCi> evenOnly ['a'..'z']
+-- "bdfhjlnprtvxz"
+evenOnly :: [a] -> [a]
+evenOnly (x:y:xs) = y : evenOnly xs
+evenOnly _ = []
+
+-- returl last elem of list by using foldl1
+lastElem :: [a] -> a
+lastElem = foldl1 seq
+
+
+-- implement of scanl
+scanl'' :: (b -> a -> b) -> b -> [a] -> [b]
+scanl'' f ini [] = [ini]
+scanl'' f ini (x:xs) = ini:scanl'' f (ini `f` x) xs
+
+facs :: (Num a, Enum a) => [a]
+facs = scanl (*) 1 [1..]
+
+partialSums :: Num a => [a] -> [a]
+partialSums = scanl (+) 0
+
+
+-- implement of scanr
+scanr'' :: (a -> b -> b) -> b -> [a] -> [b]
+scanr'' _ ini [] = [ini]
+scanr'' f ini (x:xs) = (x `f` q):qs where
+    qs@(q:_) = scanr'' f ini xs
+
+
+unfold' :: (b -> (a, b)) -> b -> [a]
+unfold' f ini = let (x, ini') = f ini in 
+    x:unfold' f ini'
+
+unfoldr' :: (b -> Maybe (a,b)) -> b -> [a]
+unfoldr' f ini = helper (f ini) where
+    helper (Just (x, ini')) = x:unfoldr' f ini'
+    helper Nothing = []
+
+-- 
+revRange :: (Char,Char) -> [Char]
+revRange (f, l) = unfoldr' g l
+    where g x 
+              | x < f = Nothing
+              | otherwise = Just (x, pred x)
+          
