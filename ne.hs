@@ -23,7 +23,6 @@ capitalize :: String -> String
 capitalize [] = []
 capitalize (x:xs) = toUpper x:xs
 
-
 decode' :: String -> String
 decode' [] = []
 decode' (magicNumber:xs) = (capitalize . foldl decode'' "") $ chanks2 xs where  

@@ -10,4 +10,4 @@ main = withSocketsDo $ bracket getSocket close talk
                 connect s (addrAddress serveraddr) >> return s
               talk s = do
                 send s "Hello, world!"
-                recv s 1024 >>= \msg -> putStrLn $ "Received " ++ msg
+                -- recv s 1024 >>= \msg -> putStrLn $ "Received " ++ msg
