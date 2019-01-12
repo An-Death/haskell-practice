@@ -1,5 +1,10 @@
 module Demo where
 
+    
+import Data.Time.Clock
+import Data.Time.Format
+import Text.Printf
+
 data B = T | F deriving (Show, Eq, Read, Enum)
 
 not' :: B -> B
@@ -34,6 +39,8 @@ isEqual (a, b) (a', b') = a == a' && b == b'
 
 
 data LogLevel = Error | Warning | Info
+    deriving (Show, Eq)
+
 -- GHCi> cmp Error Warning
 -- GT
 -- GHCI> cmp Info Warning
@@ -100,8 +107,41 @@ isSquare _ = False
 data Person = Person { firstName :: String, lastName :: String, age :: Int} 
     deriving (Show, Eq)
 
+updateAge :: Int -> Person -> Person
+updateAge newAge person = person {age = newAge}
+
+updateLastName :: Person -> Person -> Person
+updateLastName p1 p2 = p2 {lastName = lastName p1}
+
+fullName :: Person -> String
+fullName (Person {lastName = ln, firstName = fn}) = fn ++ " " ++ ln
+
+-- abbrFirstName :: Person -> Person
+-- abbrFirstName p = p {firstName = abbreviation p}
+--     where 
+--         abbreviation (Person {firstName = fn})
+--             | length fn <= 2 = fn
+--             | otherwise = head fn :"."
+abbrFirstName :: Person -> Person
+abbrFirstName p@(Person (x:y:s) _ _) = p {firstName = x : "."}
+abbrFirstName p = p
+
 infixl 1 &
 (&) :: a -> (a -> b) -> b
 x & f = f x
 
+-----------------------4.3 Record Syntax -------------------------
 
+timeToString :: UTCTime -> String
+timeToString = formatTime defaultTimeLocale "%a %d %T"
+
+data LogEntry = LogEntry { timestamp :: UTCTime, logLevel ::LogLevel, message :: String}
+
+instance Show LogEntry where
+    show (LogEntry ts level message) = printf "%s: %s: %s" (timeToString ts) (logLevelToString level) (message)
+
+logLevelToString :: LogLevel -> String
+logLevelToString = show 
+
+logEntryToString :: LogEntry -> String
+logEntryToString = show
