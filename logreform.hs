@@ -1,48 +1,80 @@
-
-import Data.ByteString.Lazy.Char8 (unpack, pack)
-import Data.List (isInfixOf, intercalate)
-import System.Directory
+import Control.Monad (liftM)
+import Data.Foldable (foldrM)
+import System.Directory (listDirectory, makeAbsolute)
 import System.FilePath.Windows (dropTrailingPathSeparator, pathSeparator, takeExtension)
 import System.CPUTime (getCPUTime)
 import System.Environment (getArgs)
 import Text.Printf
-import qualified Data.ByteString.Lazy as ByteString
-import qualified Codec.Compression.GZip as GZip
+import           Foreign.ForeignPtr
+import           Foreign.Ptr
+import qualified Data.ByteString.Char8         as C (pack)   
+import qualified Data.ByteString               as B
+import qualified Data.ByteString.Internal      as BI
+import qualified Data.ByteString.Lazy          as BL
+import qualified Data.ByteString.Lazy.Internal as BLI
+import qualified Codec.Compression.GZip        as GZip
 
-filterPatterns = [" reject:", "client=", "warning: header Subject", "TLS connection established from"]
-
-dropDots =  filter (\f -> f /= "." && f /="..")
-flatten = intercalate []
 basePath dir = (dropTrailingPathSeparator dir)
 withBase dir = (++) ((basePath dir) ++ [pathSeparator])
+newLine = BI.c2w '\n'
 
-readGziped :: FilePath -> IO [String]
-readGziped =  (fmap (lines . unpack . GZip.decompress)) . ByteString.readFile
+byteSplitLines :: BL.ByteString -> [BL.ByteString]
+byteSplitLines = BL.split newLine
 
-readFile' :: FilePath -> IO [String]
+readFile' :: FilePath -> IO [BL.ByteString]
 readFile' file
-    | takeExtension file == ".gz" = readGziped file
-    | otherwise = (fmap (lines . unpack)) . ByteString.readFile $ file
+        | takeExtension file == ".gz" = readGziped file
+        | otherwise                   = readSimple file
+    where 
+        readSimple = fmap byteSplitLines . BL.readFile
+        readGziped =  fmap (byteSplitLines . GZip.decompress) . BL.readFile
+
 
 readF :: FilePath -> IO ()
 readF file = do 
     content <- readFile' file
     mapM_ print content
 
-writeToFile :: FilePath -> ByteString.ByteString -> IO()
-writeToFile filename = ByteString.writeFile filename
+writeToFile :: FilePath -> BL.ByteString -> IO()
+writeToFile filename = BL.writeFile filename
 
-filterRecords :: [Char] -> Bool
-filterRecords = (\x -> any ($ x) (map isInfixOf filterPatterns))
+toStrict :: BL.ByteString -> B.ByteString
+toStrict BLI.Empty = B.empty
+toStrict (BLI.Chunk c BLI.Empty) = c
+toStrict lb = BI.unsafeCreate len $ go lb
+  where
+    len = BLI.foldlChunks (\l sb -> l + B.length sb) 0 lb
+
+    go  BLI.Empty                   _   = return ()
+    go (BLI.Chunk (BI.PS fp s l) r) ptr =
+        withForeignPtr fp $ \p -> do
+            BI.memcpy ptr (p `plusPtr` s) (fromIntegral l)
+            go r (ptr `plusPtr` l)
+
+
+filterPatterns = map C.pack [" reject:", "client=", "warning: header Subject", "TLS connection established from"]
+filterRecords :: B.ByteString -> Bool
+filterRecords x = any ($ x) (map B.isInfixOf filterPatterns)
+
+foldr' :: (a -> b -> b) -> b -> [a] -> b 
+foldr' f acc []      = acc
+foldr' f acc (x:xs)  = x `f` foldr f acc xs
+
+processFileData :: [BL.ByteString] -> BL.ByteString
+processFileData = foldr f BLI.Empty
+        where 
+            _newLine = BL.pack [newLine]
+            f str acc 
+                | (filterRecords . toStrict) str = BL.append acc (BL.append str _newLine)
+                | otherwise = acc
 
 processFiles :: FilePath -> FilePath -> IO ()
 processFiles dir toFile = do
-    files <- getDirectoryContents dir
-    let file = map (withBase dir) $ (reverse . dropDots) files
-    printf "TotalFiles: %i \n" ((length file)::Int)
-    listOfContents <- mapM readFile' file
-    let filtered = filter filterRecords $ flatten listOfContents
-    writeToFile toFile . GZip.compress . pack . unlines $ filtered
+    files <- listDirectory dir
+    printf "TotalFiles: %i \n" ((length files)::Int)
+    fileData <- mapM readFile' . reverse $ map (withBase dir) files
+    let content = foldr (\filedata acc -> BL.append acc (processFileData filedata) ) BLI.Empty fileData
+    writeToFile toFile . GZip.compress $ content
 
 time :: IO t -> IO t
 time a = do
