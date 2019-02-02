@@ -2,7 +2,7 @@ module Demo where
 
 import Data.Either
 import Data.Char(isDigit)
-import Data.List ( any, all, words, sortOn, elemIndex, isSubsequenceOf)
+import Data.List ( any, all, sortOn, elemIndex, isSubsequenceOf)
 import Data.List.Split (splitOn)
 import Data.Time.Clock
 import Data.Time.Format
@@ -248,3 +248,61 @@ findDigitOrX :: [Char] -> Char
 findDigitOrX x = case findDigit x of
     Just a -> a 
     Nothing -> 'X'
+
+
+
+
+data List a = Nil | Cons a (List a) deriving (Show)
+
+fromList :: List a -> [a]
+fromList Nil = []
+fromList (Cons a xs) = a:fromList xs
+
+toList :: [a] -> List a
+toList = foldr Cons Nil
+
+
+data Tree a = Leaf a | Node  (Tree a) (Tree a) 
+              deriving (Show, Eq) 
+
+-- Get the height of a tree.
+height :: Tree a -> Integer
+height (Leaf _)             = 0
+height (Node left right) = 1 + max (height left) (height right)
+
+size :: Tree a -> Integer
+size  (Leaf _)             = 0
+size  (Node left right) = 1 + (size left) + (size right)
+
+flattenTree (Leaf a) = [a]
+flattenTree (Node left right) = (++) (flattenTree left)  (flattenTree right)
+
+avg :: Tree Int -> Int
+avg t =
+    let (c,s) = go t
+    in s `div` c
+  where
+    go :: Tree Int -> (Int,Int)
+    go t = (length ft, sum ft)
+    ft = flattenTree t
+
+
+infixl 6 :+:
+infixl 7 :*:
+data Expr = Val Int | Expr :+: Expr | Expr :*: Expr -- | Expr :-: Expr
+    deriving (Eq, Show)
+
+expr1 = Val 2 :+: Val 3 :*: Val 4
+expr2 = (Val 2 :+: Val 3) :*: Val 4
+
+eval :: Expr -> Int
+eval (Val n) = n
+eval (e1 :+: e2) = eval e1 + eval e2
+eval (e1 :*: e2) = eval e1 * eval e2
+
+expand :: Expr -> Expr
+expand ((e1 :+: e2) :*: e) = expand e1 :*: expand e :+: expand e2 :*: expand e1
+expand (e :*: (e1 :+: e2)) = expand e  :*: expand e1 :+: expand e :*: expand e2
+expand (e1 :+: e2)         = expand e1 :+: expand e2
+expand (e1 :*: e2)         = expand e1 :*: expand e2
+expand e                   = e
