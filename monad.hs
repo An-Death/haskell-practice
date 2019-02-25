@@ -5,6 +5,7 @@ import Data.List (isInfixOf)
 import Data.Char (isDigit)
 import Control.Monad (ap, liftM)
 import Control.Monad.Writer
+import Control.Monad.State
 import System.CPUTime (getCPUTime)
 import System.Directory (getDirectoryContents)
 import Text.Printf
@@ -374,3 +375,44 @@ total shop = x where
 
 items :: Shopping -> [String]
 items = fst . execWriter 
+
+
+tick :: Enum a => State a a
+tick = do
+    n <- get
+    put (succ n)
+    return n
+
+writerToState :: Monoid w => Writer w a -> State w a
+writerToState m = state $ \st -> (a, st `mappend` w) where
+    (a,w) = runWriter m
+
+succ' :: Int -> Int
+succ' n = execState tick n
+
+plus :: Int -> Int -> Int
+plus n x = execState ( sequence_ $ replicate n tick ) x
+
+plus' :: Int -> Int -> Int
+plus' n x = execState (replicateM n tick) x
+
+fibStep :: State (Integer, Integer) ()
+fibStep = state $ \(a,b) -> ((), (b, a+b))
+
+execStateN :: Int -> State s a -> s -> s
+execStateN n m = execState (replicateM n m) 
+
+fib :: Int -> Integer
+fib n = fst $ execStateN n fibStep (0, 1)
+
+data Tree a = Leaf a | Fork (Tree a) a (Tree a) deriving (Show)
+numberTree :: Tree () -> Tree Integer
+numberTree tree = evalState (helper tree) 1 where
+    helper (Leaf _) = state $ \stn -> (Leaf stn, succ stn)
+    helper (Fork l _ r) = do 
+        l' <- helper l
+        n <- get
+        modify' succ
+        r' <- helper r
+        return $ Fork l' n r'
+    
