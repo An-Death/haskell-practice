@@ -7,9 +7,9 @@ import System.FilePath.Windows (dropTrailingPathSeparator, pathSeparator, takeEx
 import System.CPUTime (getCPUTime)
 import System.Environment (getArgs)
 import Text.Printf
-import qualified System.IO                     as IO
+import System.IO
 import qualified Codec.Compression.GZip        as GZip
-import qualified Data.ByteString.Lazy          as ByteString
+import qualified Data.ByteString.Lazy          as ByteString 
 import qualified Data.ByteString.Lazy.Char8    as ByteString (lines, unlines)
 import qualified Data.ByteString               as ByteStringStrict
 
@@ -17,15 +17,6 @@ basePath dir = (dropTrailingPathSeparator dir)
 withBase dir = (++) ((basePath dir) ++ [pathSeparator])
 
 isGz file = takeExtension file == ".gz"
-
-readFile' :: FilePath -> IO ByteString.ByteString
-readFile' file
-        | isGz file = readGziped file
-        | otherwise = readSimple file
-    where 
-        readSimple = ByteString.readFile
-        readGziped =  fmap GZip.decompress . ByteString.readFile
-
 
 patterns :: [ByteStringStrict.ByteString]
 patterns = [" reject:", "client=", "warning: header Subject", "TLS connection established from"]
@@ -59,14 +50,25 @@ main :: IO()
 main = do
     putStrLn "Starting..."
     [dir, toFile] <- getArgs
-    let zippedFile = (toFile ++ ".gz")
     printf "Path: %s -> %s.gz \n" dir toFile
-    time $ do
-        files <- listDirectory dir
-        printf "TotalFiles: %i \n" (length files)
+    files <- listDirectory dir
+    printf "TotalFiles: %i \n" (length files)
 
-        forM_ (reverse files) (\file -> 
-            readFile' (withBase dir file) >>= 
-            writeCompressed zippedFile . filterFile
-            )
+    time $ do
+        withFile (toFile ++ ".gz") WriteMode (\wH ->
+            forM_ (reverse files) (\file -> 
+                let 
+                    path = (withBase dir file)
+                    reader = whichReader file
+                in withFile path ReadMode (\h -> do 
+                        content <- reader h
+                        ByteString.hPut wH (GZip.compress $ filterFile content)
+                )))
     putStrLn "Done."
+
+whichReader file
+    | isGz file = readGziped
+    | otherwise = readSimple
+    where 
+    readSimple = ByteString.hGetContents
+    readGziped =  fmap GZip.decompress . readSimple
