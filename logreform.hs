@@ -26,14 +26,30 @@ whichReader file
     readSimple = Lazy.hGetContents
     readGziped =  fmap GZip.decompress . readSimple
 
-patterns :: [Strict.ByteString]
+patterns ::  [Strict.ByteString]
 patterns =  [" reject:", "client=", "warning: header Subject", "TLS connection established from"]
-filterLines :: [Lazy.ByteString] ->  [Lazy.ByteString]
-filterLines = filter match 
+
+filterLines patterns = filter match 
     where 
-        match x = all ($ x) filterPatterns
+        match x = any ($ x) filterPatterns
         filterPatterns = map (\pat v -> not . null $ Lazy.indices pat v) patterns
- 
+
+grepLog ::  [String] -> [Strict.ByteString] -> FilePath -> IO ()
+grepLog files patterns out = do
+    let 
+        filterContent = Lazy.unlines . (filterLines patterns) . Lazy.lines
+    withFile out WriteMode (\wH ->
+        forM_ files (\file -> 
+            let 
+                reader = whichReader file
+
+            in 
+                 withFile file ReadMode (\h -> do 
+                    content <- reader h
+                    Lazy.hPut wH (GZip.compress $ filterContent content)
+                )))
+
+{-# INLINE time #-}
 time :: IO t -> IO t
 time a = do
     start <- getCPUTime
@@ -43,26 +59,14 @@ time a = do
     printf "Computation time: %0.3f sec\n" (diff :: Double)
     return v 
 
-filterFile :: Lazy.ByteString -> Lazy.ByteString
-filterFile = Lazy.unlines . filterLines . Lazy.lines
-
 main :: IO()
-main =  do
+main = do
     putStrLn "Starting..."
     [dir, toFile] <- getArgs
-    printf "Path: %s -> %s.gz \n" dir toFile
-    files <- listDirectory dir
+    printf "Path: %s -> %s \n" dir toFile
+    files <- fmap (reverse . map (withBase dir)) $ listDirectory dir
     printf "TotalFiles: %i \n" (length files)
 
-    time $ do
-        withFile (toFile ++ ".gz") WriteMode (\wH ->
-            forM_ (reverse files) (\file -> 
-                let 
-                    path = (withBase dir file)
-                    reader = whichReader file
-                in withFile path ReadMode (\h -> do 
-                        content <- reader h
-                        Lazy.hPut wH (GZip.compress $ filterFile content)
-                )))
-    putStrLn "Done."
+    time $ grepLog files patterns toFile
 
+    putStrLn "Done."
