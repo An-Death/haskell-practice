@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Lists where 
 
 import Data.Char
@@ -15,9 +16,14 @@ nTimes v times
     | otherwise = []
 
 
--- Имплементации получения первого элемента пары и списка 
+-- | Имплементации получения первого элемента пары и списка 
+--   
 -- Образец пары :: ((,) x y)
--- :t fst' :: (t, t1) ->t
+--
+-- > :t fst' :: (t, t1) ->t
+-- 
+-- >>> fst' ("first", "second")
+-- "first"
 fst' :: (x, y) -> x
 fst' ((,) x y) = x
 
@@ -47,6 +53,13 @@ len' (x:xs) = 1 + len' xs
 inc :: Int -> Int
 inc x = x + 1
 
+-- | sily realisation of length. I'm just learning
+-- >>> len'' []
+-- 0
+-- >>> len'' [1,2,3]
+-- 3
+-- >>> len'' [0..99]
+-- 100
 len'' :: [a] -> Int
 len'' []     = 0
 len'' (_:xs) = let 
@@ -56,8 +69,8 @@ len'' (_:xs) = let
     in helper 1 xs
 
 
--- sums of all lists
--- GHCi> sum3 [1,2,3] [4,5] [6]
+-- | sums of all lists
+-- >>> sum3 [1,2,3] [4,5] [6]
 -- [11,7,3]
 sum3 :: Num a => [a] -> [a] -> [a] -> [a]
 sum3 [] [] [] = []
@@ -66,14 +79,17 @@ sum3 a b c = (head' a + head' b + head' c) : sum3 (tail' a) (tail' b) (tail' c) 
     tail' l = tail l
     head' [] = 0
     head' l = head l
-    
--- GHCi> filterDisj (< 10) odd [7,8,10,11,12]
+  
+-- | filter by two predicates 
+-- >>> filterDisj (< 10) odd [7,8,10,11,12]
 -- [7,8,11]
 filterDisj :: (a -> Bool) -> (a -> Bool) -> [a] -> [a]
 filterDisj f g l = filter anyOf' l where
     anyOf' x =  f x || g x
 
--- GHCi> qsort [1,3,2,5]
+-- | quick sort implementation
+-- prop> qsort xs == (qsort . qsort) (xs :: [Int])
+-- >>> qsort [1,3,2,5]
 -- [1,2,3,5]
 qsort :: Ord a => [a] -> [a]
 qsort [] = []
@@ -85,9 +101,9 @@ qsort' [] (x : xs) = qsort' [x] xs
 qsort' fs ss = qsort fs ++ qsort ss
 
 
--- Реалиация Data.List.permutations кустарным способом
---GHCi> perms [1,2,3]
---[[1,2,3],[1,3,2],[2,1,3],[2,3,1],[3,1,2],[3,2,1]]
+-- | Реалиация Data.List.permutations кустарным способом
+-- >>> perms [1,2,3]
+-- [[1,2,3],[2,3,1],[3,1,2],[1,3,2],[3,2,1],[2,1,3]]
 rotations :: Int -> [a] -> [[a]]
 rotations len xs = take len (iterate (\(y:ys) -> ys ++ [y]) xs)
 
@@ -99,14 +115,27 @@ perms (x:y:[z]) = [[x,y,z],[y,z,x],[z,x,y],[x,z,y],[z,y,x],[y,x,z]]
 perms il@(x:xs) = concatMap ((rotations len).(x:)) (perms xs)
                   where len = length il
 
-
+-- | Take? -_-
+-- >>> take' 0 [1,2,3]
+-- []
+-- >>> take' 1 [1,2,3]
+-- [1]
+-- >>> take' 10 [0..]
+-- [0,1,2,3,4,5,6,7,8,9]
 take' :: Int -> [a] -> [a]
 take' _ [] = error "Not valid"
 take' 0 x = []
 take' n (x:xs) = x:take' (n-1) xs
 
 
--- reqursive fibo
+-- $setup
+-- >>> import Control.Applicative
+-- >>> import Test.QuickCheck
+-- >>> newtype Small = Small Integer deriving Show
+-- >>> instance Arbitrary Small where arbitrary = Small . (`mod` 10) <$> arbitrary
+
+-- | reqursive fibo
+-- prop> \(Small n) -> fibo n == fibo (n + 2) - fibo (n + 1)
 fibo :: Integer -> Integer
 fibo 0 = 0
 fibo 1 = 1
@@ -116,7 +145,9 @@ fibo n = fibo (n-1) + fibo (n-2)
 fibStream' :: [Integer]
 fibStream' = [fibo i | i<- [0..]]
 
-
+-- | Fast and lazy implementation of fibo
+-- >>> last $ take 11 fibStream
+-- 55
 fibStream :: [Integer]
 fibStream = 0 : 1 : zipWith (+) fibStream (tail fibStream)
 
@@ -203,8 +234,8 @@ helper' acc c
 -- After some hours of optimizatios
 change' :: (Ord a, Num a) => a -> [[a]]
 change' n | n < 0     = []
-         | n == 0    = [[]]
-         | otherwise = [ x : xs | x <- coins, xs <- change (n - x) ]
+          | n == 0    = [[]]
+          | otherwise = [ x : xs | x <- coins, xs <- change' (n - x) ]
         
 
 -- foldr from right to left
