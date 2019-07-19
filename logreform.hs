@@ -42,14 +42,12 @@ grepLog files patterns out = do
         forM_ files (\file -> 
             let 
                 reader = whichReader file
-
             in 
                  withFile file ReadMode (\h -> do 
                     content <- reader h
                     Lazy.hPut wH (GZip.compress $ filterContent content)
                 )))
 
-{-# INLINE time #-}
 time :: IO t -> IO t
 time a = do
     start <- getCPUTime
