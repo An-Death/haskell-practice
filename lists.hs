@@ -100,6 +100,11 @@ qsort' :: Ord a => [a] -> [a] -> [a]
 qsort' [] (x : xs) = qsort' [x] xs
 qsort' fs ss = qsort fs ++ qsort ss
 
+-- | Возвращает список с обратным порядком элементов
+-- >>> reverse [1,2,3]
+-- [3,2,1]
+reverse :: [a] -> [a]
+reverse = undefined
 
 -- | Реалиация Data.List.permutations кустарным способом
 -- >>> perms [1,2,3]

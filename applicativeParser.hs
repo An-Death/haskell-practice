@@ -3,6 +3,7 @@ module ApplicativeParser where
 
 import Data.Char (isLower, isDigit, digitToInt)
 import Control.Applicative
+import Control.Monad
 -- import Text.Parsec 
 
 
@@ -186,7 +187,16 @@ instance Alternative Prs where
             in  if null ps 
                 then runPrs q s
                 else ps
-                
+
+-- charE 'A' >>= \a -> charE 'B' >>= \b -> return (a,b)
+instance Monad Prs where
+    return = pure
+    (>>=) pa f = Prs func where
+        func s = do
+            (a, s') <- runPrs pa s
+            (b, s'') <- runPrs (f a) s'
+            return (b, s'')
+   
 
 satisfyP :: (Char -> Bool) -> Prs Char
 satisfyP pred = Prs f where
@@ -245,3 +255,62 @@ mult = (*) <$> natP <* charP '*' <*> natP
 -- Just (77,"AAA")
 natP :: Prs Int
 natP = read <$> many1P (satisfyP isDigit)
+
+
+newtype PrsEP a = PrsEP { runPrsEP :: Int -> String -> (Int, Either String (a, String)) }
+
+parseEP :: PrsEP a -> String -> Either String (a, String)
+parseEP p  = snd . runPrsEP p 0
+
+satisfyEP :: (Char -> Bool) -> PrsEP Char
+satisfyEP f = PrsEP func where 
+    func pos [] = (pos+1, Left ("pos " ++ (show $ pos+1) ++ ": unexpected end of input"))
+    func pos (c:cx) = 
+        let pos' = pos +1 in 
+            if f c then
+                (pos', Right (c, cx))
+            else
+                (pos', Left ("pos " ++ (show pos') ++ ": unexpected " ++ [c]))
+    
+instance Functor PrsEP where
+    fmap f = PrsEP . (fmap . fmap . fmap . fmap $ \(a, s) -> (f a, s)) . runPrsEP
+
+instance Applicative PrsEP where
+    pure x = PrsEP $ \i s -> (i, Right (x, s))
+    pf <*> px = PrsEP $ \i s -> case runPrsEP pf i s of
+                (i', Left e) -> (i', Left e)
+                (i', Right (f, s')) -> runPrsEP (f <$> px) i' s'
+
+-- | 
+--  
+-- >>> runPrsEP empty 0 "ABCDEFG"
+-- (0,Left "pos 0: empty alternative")
+--
+-- >>> parseEP (tripleP "ABC" <|> tripleP "ADC") "ABE"
+-- Left "pos 3: unexpected E"
+--
+-- >>> parseEP (tripleP "ABC" <|> tripleP "ADC") "ADE"
+-- Left "pos 3: unexpected E"
+-- 
+-- >>> parseEP (tripleP "ABC" <|> tripleP "ADC") "AEF"
+-- Left "pos 2: unexpected E"
+instance Alternative PrsEP where
+    empty = PrsEP $ \pos _ -> (pos, Left $ "pos " ++ (show pos) ++ ": empty alternative")
+
+    (<|>) p1 p2 = PrsEP func where
+        func pos s = if pos1 > pos2  then r1 else r2
+            where 
+                r1@(pos1, p1') = runPrsEP p1 pos s
+                r2@(pos2, p2') = runPrsEP p2 pos s
+
+charEP c = satisfyEP (== c)
+anyEP = satisfyEP (const True)
+testP = (,) <$> anyEP <* charEP 'B' <*> anyEP
+tripleP [a,b,c] = (\x y z -> [x,y,z]) <$> charEP a <*> charEP b <*>  charEP c
+
+pythags = do
+    z <- [1..]
+    x <- [1..z]
+    y <- [x..z]
+    guard (x^2+y^2 == z^2)
+    return (x,y,z)
