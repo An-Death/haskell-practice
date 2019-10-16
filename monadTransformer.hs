@@ -10,6 +10,7 @@ import Control.Monad.Trans.Writer
 import Data.Char (toUpper)
 import Data.List (partition)
 
+
 secondElem :: Reader [String] String
 secondElem = do
     el2 <- asks (map toUpper . head . tail)
@@ -88,12 +89,12 @@ myLift = lift . lift
 -- ("DEFG","abc")
 logFirstAndRetSecondRWT :: MyRWT IO String
 logFirstAndRetSecondRWT = do
-  el1 <- myAsks head
-  myLift $ putStrLn $ "First is " ++ show el1
-  el2 <- myAsks (map toUpper . head . tail)
-  myLift $ putStrLn $ "Second is " ++ show el2
-  myTell el1
-  return el2
+    el1 <- myAsks head
+    myLift $ putStrLn $ "First is " ++ show el1
+    el2 <- myAsks (map toUpper . head . tail)
+    myLift $ putStrLn $ "Second is " ++ show el2
+    myTell el1
+    return el2
 
 -- | Stepik 3.3.10 
 --
@@ -201,8 +202,79 @@ goR st = do
 
 tickCollatz' :: StateT Integer IO Integer
 tickCollatz' = do
-  n <- get
-  let res = if odd n then 3 * n + 1 else n `div` 2
-  lift $ putStrLn $ show res
-  put res
-  return n
+    n <- get
+    let res = if odd n then 3 * n + 1 else n `div` 2
+    liftPrint res
+    put res
+    return n
+        where
+            liftPrint = lift . putStrLn . show 
+newtype Arr2T e1 e2 m a = Arr2T { getArr2T :: e1 -> e2 -> m a }
+newtype Arr3T e1 e2 e3 m a = Arr3T { getArr3T :: e1 -> e2 -> e3 -> m a }
+            
+
+instance (Functor m) => Functor (Arr2T e1 e2 m) where
+    fmap f n = Arr2T $ (fmap f .) . getArr2T n
+
+
+instance (Functor m) => Functor (Arr3T e1 e2 e3 m) where
+   fmap f n = Arr3T $ ((fmap f .).) . getArr3T n
+
+-- | Stepic Test Applicative instance for Arr2T
+-- >>> let a2l = Arr2T $ \e1 e2 -> [e1,e2]
+-- >>> let a2fl = Arr2T $ \e1 e2 -> [(e1*e2+),const 7]
+-- >>> getArr2T (a2fl <*> a2l) 2 10
+-- [22,30,7,7]
+instance (Applicative m) => Applicative (Arr2T e1 e2 m) where
+    pure = Arr2T . const2 . pure
+    f <*> v = Arr2T $ \e1 e2 -> getArr2T f e1 e2 <*> getArr2T v e1 e2 
+    
+-- | Stepic Test Applicative instance for Arr3T
+-- >>> let a3fl = Arr3T $ \e1 e2 e3 -> [(e2+),(e3+)]
+-- >>> let a3l = Arr3T $ \e1 e2 e3 -> [e1,e2]
+-- >>> getArr3T (a3fl <*> a3l) 3 5 7
+-- [8,10,10,12]
+instance (Applicative m) => Applicative (Arr3T e1 e2 e3 m) where
+    pure = Arr3T . const3 . pure
+    f <*> v = Arr3T $ \e1 e2 e3 -> getArr3T f e1 e2 e3 <*> getArr3T v e1 e2 e3
+
+
+-- | Stepic Test Monad instance for Arr2T
+-- >>> let a2l = Arr2T $ \e1 e2 -> [e1,e2]
+-- >>> getArr2T (do {x <- a2l; y <- a2l; return (x + y)}) 3 5
+-- [6,8,8,10]
+instance (Monad m) => Monad (Arr2T e1 e2 m) where
+    m >>= a2 = Arr2T $ \e1 e2 -> do
+        v <- getArr2T m e1 e2 
+        getArr2T (a2 v) e1 e2
+
+-- | Stepic Test Monad instance for Arr3T
+-- >>> let a3m = Arr3T $ \e1 e2 e3 -> Just (e1 + e2 + e3)
+-- >>> getArr3T (do {x <- a3m; y <- a3m; return (x * y)}) 2 3 4
+-- Just 81
+instance (Monad m) => Monad (Arr3T e1 e2 e3 m) where
+    m >>= a3 = Arr3T $ \e1 e2 e3 -> do
+        v <- getArr3T m e1 e2 e3
+        getArr3T (a3 v) e1 e2 e3
+    fail = Arr3T . const3 . fail
+
+
+
+const2 :: a -> b -> c -> a
+const2 = const . const
+
+const3 :: a -> b -> c -> d -> a
+const3 = const . const . const
+
+-- | MonadTrance instance for Arr2t
+-- >>> let a2l = Arr2T $ \e1 e2 -> [e1,e2]
+-- >>> getArr2T (do {x <- a2l; y <- lift [10,20,30]; return (x+y)}) 3 4
+-- [13,23,33,14,24,34]
+instance MonadTrans (Arr2T e1 e2) where
+    lift m = Arr2T $ \_ _ -> m
+
+-- | Impl of ReaderT interface `asks` for Arr2T
+-- >>> getArr2T (do {x <- asks2 const; y <- asks2 (flip const); z <- asks2 (,); return (x,y,z)}) 'A' 'B'
+-- ('A','B',('A','B'))
+asks2 :: Monad m => (e1 -> e2 -> a) -> Arr2T e1 e2 m a
+asks2 f = Arr2T $ (return .). f
